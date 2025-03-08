@@ -1,0 +1,295 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r}
+# Load necessary libraries
+library(caret)
+library(class)
+# Load the dataset
+df <- read.csv("/Users/balajipamidi/Desktop/Final Project /data.csv")
+# Explore dataset
+str(df)
+```
+
+```{r}
+dim(df)
+```
+
+
+```{r}
+head(df)
+```
+```{r}
+library(ggplot2)
+
+# Summarize total deaths by jurisdiction
+total_deaths_by_jurisdiction <- df %>%
+  group_by(Jurisdiction.of.Occurrence) %>%
+  summarise(COVID.19_Multiple.Cause.of.Death = sum(COVID.19_Multiple.Cause.of.Death))
+
+# Create bar chart
+ggplot(total_deaths_by_jurisdiction, aes(x = Jurisdiction.of.Occurrence, y = COVID.19_Multiple.Cause.of.Death)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(title = "COVID.19_Multiple.Cause.of.Death by Jurisdiction of Occurrence",
+       x = "Jurisdiction of Occurrence",
+       y = "COVID.19_Multiple.Cause.of.Death") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+
+```{r}
+## Time Series Plot of Total Deaths 
+
+library(ggplot2)
+
+# Convert Date columns to Date format
+df$Week.Ending.Date <- as.Date(df$Week.Ending.Date, format = "%Y-%m-%d")
+
+# Time series plot of Total Deaths
+ggplot(df, aes(x = Week.Ending.Date, y = Total_Deaths)) +
+  geom_line() +
+  labs(title = "Total Deaths Over Time",
+       x = "Week Ending Date",
+       y = "Total Deaths")
+```
+```{r}
+## Bar Plot of Deaths by Cause
+
+# Summarize deaths by cause
+library(tidyr)
+library(ggplot2)
+
+df_cause <- df %>%
+  select(Week.Ending.Date, Malignant.neoplasms, Alzheimer.disease, Chronic.lower.respiratory.diseases, Diseases.of.heart, Cerebrovascular.diseases) %>%
+  pivot_longer(cols = -Week.Ending.Date, names_to = "Cause", values_to = "Deaths")
+
+# Bar plot of deaths by cause
+ggplot(df_cause, aes(x = Week.Ending.Date, y = Deaths, fill = Cause)) +
+  geom_col(position = "stack") +
+  labs(title = "Deaths by Cause Over Time",
+       x = "Week Ending Date",
+       y = "Deaths",
+       fill = "Cause") +
+  scale_fill_brewer(palette = "Set1")
+
+```
+```{r}
+library(ggplot2)
+
+#  scatter plot
+ggplot(df, aes(x = Malignancy_Mortality_Rate, y = Heart_Disease_Mortality_Rate)) +
+  geom_point(color = "red") +
+  labs(title = "Scatter Plot of Malignancy Mortality Rate vs. Heart Disease Mortality Rate",
+       x = "Malignancy Mortality Rate",
+       y = "Heart Disease Mortality Rate")
+
+```
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# Select only numeric columns
+numeric_cols <- df %>%
+  select_if(is.numeric)
+
+# Reshape the data for box plot
+df_long <- numeric_cols %>%
+  pivot_longer(everything(), names_to = "Variable", values_to = "Value")
+
+# Create box plot
+ggplot(df_long, aes(x = Variable, y = Value)) +
+  geom_boxplot() +
+  labs(title = "Box Plot of Numeric Columns",
+       x = "Variable",
+       y = "Value") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Define a function to remove outliers based on IQR method
+remove_outliers <- function(x) {
+  qnt <- quantile(x, probs=c(.25, .75), na.rm = TRUE)
+  H <- 1.5 * IQR(x, na.rm = TRUE)
+  x[x < (qnt[1] - H)] <- NA
+  x[x > (qnt[2] + H)] <- NA
+  x
+}
+
+# Select only numeric columns
+numeric_cols <- df %>%
+  select_if(is.numeric)
+
+# Remove outliers from numeric columns
+df_clean <- numeric_cols %>%
+  mutate(across(everything(), remove_outliers))
+
+# Reshape the data for box plot
+df_long <- pivot_longer(df_clean, everything(), names_to = "Variable", values_to = "Value", values_drop_na = TRUE)
+
+# Create box plot without outliers
+ggplot(df_long, aes(x = Variable, y = Value)) +
+  geom_boxplot() +
+  labs(title = "Box Plot of Numeric Columns (Outliers Removed)",
+       x = "Variable",
+       y = "Value") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+```{r}
+library(ggplot2)
+library(dplyr)
+library(maps)
+
+# Filter the data to include only states (excluding "United States" and "Puerto Rico")
+us_states_data <- df %>%
+  filter(Jurisdiction.of.Occurrence %in% c(
+    'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado',
+    'Connecticut', 'Delaware', 'District of Columbia', 'Florida', 'Georgia',
+    'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky',
+    'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota',
+    'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire',
+    'New Jersey', 'New Mexico', 'New York', 'North Carolina', 'North Dakota',
+    'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island', 'South Carolina',
+    'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington',
+    'West Virginia', 'Wisconsin', 'Wyoming'
+  ))
+
+# Aggregate total deaths by state
+state_deaths <- us_states_data %>%
+  group_by(Jurisdiction.of.Occurrence) %>%
+  summarise(Total_Deaths = sum(Total_Deaths, na.rm = TRUE))
+
+# Get state boundaries
+state_map <- map_data("state")
+
+# Merge state boundaries with total deaths data
+state_map <- left_join(state_map, state_deaths, by = c("region" = "Jurisdiction.of.Occurrence"))
+
+# Plot the choropleth map
+ggplot() +
+  geom_map(data = state_map, map = state_map,
+           aes(map_id = region, fill = Total_Deaths),
+           color = "black", size = 0.1) +
+  scale_fill_gradient(name = "Total Deaths", low = "lightblue", high = "red") +
+  expand_limits(x = state_map$long, y = state_map$lat) +
+  labs(title = "Total Deaths by State in the United States") +
+  theme_void()
+
+
+```
+
+```{r}
+library(shiny)
+library(shinydashboard)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+
+# Define UI
+ui <- dashboardPage(
+  dashboardHeader(title = "Weekly Provisional Counts of Deaths"),
+  dashboardSidebar(
+    sidebarMenu(
+      menuItem("Visualizations", tabName = "visualizations", icon = icon("bar-chart-o"))
+    )
+  ),
+  dashboardBody(
+    tabItems(
+      tabItem(tabName = "visualizations",
+              fluidRow(
+                box(width = 6, title = "Total Deaths by Jurisdiction", status = "primary", solidHeader = TRUE,
+                    plotOutput("total_deaths_plot")),
+                box(width = 6, title = "Total Deaths Over Time", status = "primary", solidHeader = TRUE,
+                    plotOutput("total_deaths_over_time_plot"))
+              ),
+              fluidRow(
+                box(width = 6, title = "Deaths by Cause Over Time", status = "primary", solidHeader = TRUE,
+                    plotOutput("deaths_by_cause_plot")),
+                box(width = 6, title = "Scatter Plot", status = "primary", solidHeader = TRUE,
+                    plotOutput("scatter_plot_plot"))
+              ),
+              fluidRow(
+                box(width = 6, title = "Box Plot", status = "primary", solidHeader = TRUE,
+                    plotOutput("box_plot_plot"))
+              )
+      )
+    )
+  )
+)
+# Define server logic
+server <- function(input, output) {
+  
+  output$total_deaths_plot <- renderPlot({
+    # Your code for total deaths by jurisdiction plot
+    # Replace df with your actual data frame
+    # Ensure you have executed all required code snippets before running this
+    total_deaths_by_jurisdiction <- df %>%
+      group_by(Jurisdiction.of.Occurrence) %>%
+      summarise(COVID.19_Multiple.Cause.of.Death = sum(COVID.19_Multiple.Cause.of.Death))
+    
+    ggplot(total_deaths_by_jurisdiction, aes(x = Jurisdiction.of.Occurrence, y = COVID.19_Multiple.Cause.of.Death)) +
+      geom_bar(stat = "identity", fill = "skyblue") +
+      labs(title = "COVID.19_Multiple.Cause.of.Death by Jurisdiction of Occurrence",
+           x = "Jurisdiction of Occurrence",
+           y = "COVID.19_Multiple.Cause.of.Death") +
+      theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  })
+  
+  output$total_deaths_over_time_plot <- renderPlot({
+    # Your code for total deaths over time plot
+    # Replace df with your actual data frame
+    ggplot(df, aes(x = Week.Ending.Date, y = Total_Deaths)) +
+      geom_line() +
+      labs(title = "Total Deaths Over Time",
+           x = "Week Ending Date",
+           y = "Total Deaths")
+  })
+  
+  output$deaths_by_cause_plot <- renderPlot({
+    # Your code for deaths by cause over time plot
+    # Replace df_cause with your actual data frame
+    ggplot(df_cause, aes(x = Week.Ending.Date, y = Deaths, fill = Cause)) +
+      geom_col(position = "stack") +
+      labs(title = "Deaths by Cause Over Time",
+           x = "Week Ending Date",
+           y = "Deaths",
+           fill = "Cause") +
+      scale_fill_brewer(palette = "Set1")
+  })
+  
+  output$scatter_plot_plot <- renderPlot({
+    # Your code for scatter plot
+    # Replace df with your actual data frame
+    ggplot(df, aes(x = Malignancy_Mortality_Rate, y = Heart_Disease_Mortality_Rate)) +
+      geom_point(color = "red") +
+      labs(title = "Scatter Plot of Malignancy Mortality Rate vs. Heart Disease Mortality Rate",
+           x = "Malignancy Mortality Rate",
+           y = "Heart Disease Mortality Rate")
+  })
+  
+  output$box_plot_plot <- renderPlot({
+    # Your code for box plot
+    # Replace df_long with your actual data frame
+    ggplot(df_long, aes(x = Variable, y = Value)) +
+      geom_boxplot() +
+      labs(title = "Box Plot of Numeric Columns (Outliers Removed)",
+           x = "Variable",
+           y = "Value") +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  })
+}
+
+# Run the application 
+shinyApp(ui = ui, server = server)
+
+```
+
